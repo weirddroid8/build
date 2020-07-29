@@ -474,16 +474,20 @@ ifndef $$(parent_target)
 endif
 endef
 
-my_local_path := $(patsubst %/,%,$(LOCAL_PATH))
-my_local_path_target := MODULES-IN-$(subst /,-,$(my_local_path))
+_local_path := $(patsubst %/,%,$(LOCAL_PATH))
+_local_path_target := MODULES-IN-$(subst /,-,$(_local_path))
 
-.PHONY: $(my_local_path_target)
-$(my_local_path_target): $(my_register_name)
+.PHONY: $(_local_path_target)
+$(_local_path_target): $(my_register_name)
 
-ifndef $(my_local_path_target)
-  $(my_local_path_target) := true
-  $(eval $(call my_path_comp,$(my_local_path),$(my_local_path_target)))
+ifndef $(_local_path_target)
+  $(_local_path_target) := true
+  $(eval $(call my_path_comp,$(_local_path),$(_local_path_target)))
 endif
+
+_local_path :=
+_local_path_target :=
+my_path_comp :=
 
 ###########################################################
 ## Module installation rule

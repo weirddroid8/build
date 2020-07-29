@@ -250,7 +250,7 @@ METADATA_NAME = 'META-INF/com/android/metadata'
 POSTINSTALL_CONFIG = 'META/postinstall_config.txt'
 DYNAMIC_PARTITION_INFO = 'META/dynamic_partitions_info.txt'
 AB_PARTITIONS = 'META/ab_partitions.txt'
-UNZIP_PATTERN = ['IMAGES/*', 'INSTALL/*', 'META/*', 'RADIO/*', 'SYSTEM/build.prop']
+UNZIP_PATTERN = ['IMAGES/*', 'INSTALL/*', 'META/*', 'RADIO/*']
 RETROFIT_DAP_UNZIP_PATTERN = ['OTA/super_*.img', AB_PARTITIONS]
 
 # Images to be excluded from secondary payload. We essentially only keep
@@ -1070,44 +1070,13 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
     sysmount = "/system"
 
   if OPTIONS.backuptool:
-    script.RunBackup("backup", sysmount)
-
-  system_progress = 0.75
-
-  script.Print("*********************************************");
-  script.Print("*       ##### ####****   ########****       *")
-  script.Print("*     ############**** ##########******     *")
-  script.Print("*    ####     ####****#####  ****  *****    *")
-  script.Print("*    ###       ###****####   ****   ****    *")
-  script.Print("*    ####     ####****#####  ****  *****    *")
-  script.Print("*     ############**** ##########******     *")
-  script.Print("*       ##### ####****   ########****       *")
-  script.Print("*                            ****           *")
-  script.Print("*                            ****           *")
-  script.Print("* www.aicp-rom.com   -   Get your flash ON  *")
-  script.Print("*********************************************");
-
-
-  build = target_info.GetBuildProp("ro.build.date")
-  script.Print("*************    AICP   BUILD   *************");
-  script.Print("*********************************************");
-  script.Print("   Compiled: %s"%(build));
-
-  device = target_info.GetBuildProp("ro.product.device")
-  if target_info.GetBuildProp("ro.product.model") is not None:
-    model = target_info.GetBuildProp("ro.product.model")
-    script.Print("   Device: %s (%s)"%(model, device));
-  else:
-    script.Print("   Device: %s"%(device));
-  script.Print("*********************************************");
+    script.RunBackup("backup", sysmount, target_info.get('use_dynamic_partitions') == "true")
 
   # All other partitions as well as the data wipe use 10% of the progress, and
   # the update of the system partition takes the remaining progress.
   system_progress = 0.9 - (len(block_diff_dict) - 1) * 0.1
-
   if OPTIONS.wipe_user_data:
     system_progress -= 0.1
-
   progress_dict = {partition: 0.1 for partition in block_diff_dict}
   progress_dict["system"] = system_progress
 
@@ -1138,7 +1107,7 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
 
   if OPTIONS.backuptool:
     script.ShowProgress(0.02, 10)
-    script.RunBackup("restore", sysmount)
+    script.RunBackup("restore", sysmount, target_info.get('use_dynamic_partitions') == "true")
 
   script.WriteRawImage("/boot", "boot.img")
 
@@ -1174,9 +1143,6 @@ endif;
   script.SetProgress(1)
   script.AddToZip(input_zip, output_zip, input_path=OPTIONS.updater_binary)
   metadata["ota-required-cache"] = str(script.required_cache)
-
-  common.ZipWriteStr(output_zip, "system/build.prop",
-                     ""+input_zip.read("SYSTEM/build.prop"))
 
   # We haven't written the metadata entry, which will be done in
   # FinalizeMetadata.
@@ -1901,9 +1867,6 @@ endif;
     script.AddToZip(target_zip, output_zip, input_path=OPTIONS.updater_binary)
   metadata["ota-required-cache"] = str(script.required_cache)
 
-  common.ZipWriteStr(output_zip, "system/build.prop",
-                     ""+target_zip.read("SYSTEM/build.prop"))
-
   # We haven't written the metadata entry yet, which will be handled in
   # FinalizeMetadata().
   common.ZipClose(output_zip)
@@ -2189,11 +2152,6 @@ def WriteABOTAPackageWithBrilloScript(target_file, output_file,
                                additional_args=additional_args)
     secondary_payload.Sign(payload_signer)
     secondary_payload.WriteToZip(output_zip)
-
-  target_zip = zipfile.ZipFile(target_file, "r")
-  common.ZipWriteStr(output_zip, "system/build.prop",
-                     target_zip.read("SYSTEM/build.prop"))
-  common.ZipClose(target_zip)
 
   # If dm-verity is supported for the device, copy contents of care_map
   # into A/B OTA package.

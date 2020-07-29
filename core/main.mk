@@ -275,7 +275,10 @@ ifneq (,$(user_variant))
   # Target is secure in user builds.
   ADDITIONAL_DEFAULT_PROPERTIES += ro.secure=1
   ADDITIONAL_DEFAULT_PROPERTIES += security.perf_harden=1
-  ADDITIONAL_DEFAULT_PROPERTIES += ro.adb.secure=1
+
+  ifeq ($(user_variant),user)
+    ADDITIONAL_DEFAULT_PROPERTIES += ro.adb.secure=1
+  endif
 
   ifeq ($(user_variant),userdebug)
     # Pick up some extra useful tools
@@ -370,7 +373,7 @@ ADDITIONAL_BUILD_PROPERTIES += net.bt.name=Android
 
 # ------------------------------------------------------------
 # Include vendor specific additions to build properties
--include vendor/aicp/build/core/main.mk
+-include vendor/lineage/build/core/main.mk
 
 # ------------------------------------------------------------
 # Define a function that, given a list of module tags, returns

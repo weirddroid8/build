@@ -33,7 +33,7 @@ Invoke ". build/envsetup.sh" from your shell to add the following functions to y
 
 EOF
 
-    __print_aicp_functions_help
+    __print_lineage_functions_help
 
 cat <<EOF
 
@@ -48,7 +48,7 @@ EOF
     local T=$(gettop)
     local A=""
     local i
-    for i in `cat $T/build/envsetup.sh $T/vendor/aicp/build/envsetup.sh | sed -n "/^[[:blank:]]*function /s/function \([a-z_]*\).*/\1/p" | sort | uniq`; do
+    for i in `cat $T/build/envsetup.sh $T/vendor/lineage/build/envsetup.sh | sed -n "/^[[:blank:]]*function /s/function \([a-z_]*\).*/\1/p" | sort | uniq`; do
       A="$A $i"
     done
     echo $A
@@ -59,8 +59,8 @@ function build_build_var_cache()
 {
     local T=$(gettop)
     # Grep out the variable names from the script.
-    cached_vars=(`cat $T/build/envsetup.sh $T/vendor/aicp/build/envsetup.sh | tr '()' '  ' | awk '{for(i=1;i<=NF;i++) if($i~/get_build_var/) print $(i+1)}' | sort -u | tr '\n' ' '`)
-    cached_abs_vars=(`cat $T/build/envsetup.sh $T/vendor/aicp/build/envsetup.sh | tr '()' '  ' | awk '{for(i=1;i<=NF;i++) if($i~/get_abs_build_var/) print $(i+1)}' | sort -u | tr '\n' ' '`)
+    cached_vars=(`cat $T/build/envsetup.sh $T/vendor/lineage/build/envsetup.sh | tr '()' '  ' | awk '{for(i=1;i<=NF;i++) if($i~/get_build_var/) print $(i+1)}' | sort -u | tr '\n' ' '`)
+    cached_abs_vars=(`cat $T/build/envsetup.sh $T/vendor/lineage/build/envsetup.sh | tr '()' '  ' | awk '{for(i=1;i<=NF;i++) if($i~/get_abs_build_var/) print $(i+1)}' | sort -u | tr '\n' ' '`)
     # Call the build system to dump the "<val>=<value>" pairs as a shell script.
     build_dicts_script=`\builtin cd $T; build/soong/soong_ui.bash --dumpvars-mode \
                         --vars="${cached_vars[*]}" \
@@ -142,12 +142,12 @@ function check_product()
         echo "Couldn't locate the top of the tree.  Try setting TOP." >&2
         return
     fi
-    if (echo -n $1 | grep -q -e "^aicp_") ; then
-        AICP_BUILD=$(echo -n $1 | sed -e 's/^aicp_//g')
+    if (echo -n $1 | grep -q -e "^lineage_") ; then
+        LINEAGE_BUILD=$(echo -n $1 | sed -e 's/^lineage_//g')
     else
-        AICP_BUILD=
+        LINEAGE_BUILD=
     fi
-    export AICP_BUILD
+    export LINEAGE_BUILD
 
         TARGET_PRODUCT=$1 \
         TARGET_BUILD_VARIANT= \
@@ -331,31 +331,6 @@ function printconfig()
     get_build_var report_config
 }
 
-function execaicpscripts()
-{
-    getdevice=$(echo $TARGET_PRODUCT | cut -d "_" -f2)
-    devicepath=$(find device/ -name $getdevice -type d | grep -v twrp)
-    exec_script_location=$devicepath/pre_scripts.txt
-    if [ -f $exec_script_location ];then
-        echo -e "\npre script configuration: $exec_script_location found"
-	while read each_script
-        do
-	    script_path=$devicepath/$each_script
-	    if [ -x $script_path ];then
-                echo "executing pre script: $each_script"
-	        $script_path
-            else
-                echo "pre script: $script_path is not existent or executable"
-            fi
-        done < $exec_script_location
-    fi
-
-    unset getdevice
-    if [ ! -z ${each_script+x} ]; then
-        unset each_script
-        unset script_path
-    fi
-}
 function set_stuff_for_environment()
 {
     setpaths
@@ -679,16 +654,16 @@ function lunch()
     check_product $product
     if [ $? -ne 0 ]
     then
-        # if we can't find a product, try to grab it off the AICP GitHub
+        # if we can't find a product, try to grab it off the LineageOS GitHub
         T=$(gettop)
         cd $T > /dev/null
-        vendor/aicp/build/tools/roomservice.py $product
+        vendor/lineage/build/tools/roomservice.py $product
         cd - > /dev/null
         check_product $product
     else
         T=$(gettop)
         cd $T > /dev/null
-        vendor/aicp/build/tools/roomservice.py $product true
+        vendor/lineage/build/tools/roomservice.py $product true
         cd - > /dev/null
     fi
 
@@ -725,7 +700,6 @@ function lunch()
 
     set_stuff_for_environment
     printconfig
-    [ $AICP_EXEC_PRE_SCRIPT ] && execaicpscripts
     destroy_build_var_cache
 }
 
@@ -1647,4 +1621,4 @@ addcompletions
 
 export ANDROID_BUILD_TOP=$(gettop)
 
-. $ANDROID_BUILD_TOP/vendor/aicp/build/envsetup.sh
+. $ANDROID_BUILD_TOP/vendor/lineage/build/envsetup.sh

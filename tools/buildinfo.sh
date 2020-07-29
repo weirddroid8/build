@@ -51,15 +51,10 @@ echo "ro.build.product=$TARGET_DEVICE"
 
 echo "# Do not try to parse description or thumbprint"
 echo "ro.build.description=$PRIVATE_BUILD_DESC"
-echo "ro.build.fingerprint=$BUILD_FINGERPRINT"
 if [ -n "$BUILD_THUMBPRINT" ] ; then
   echo "ro.build.thumbprint=$BUILD_THUMBPRINT"
 fi
 
-if [ -n "$DEVICE_MAINTAINERS" ] ; then
-  echo "ro.aicp.maintainer=$DEVICE_MAINTAINERS"
-fi
-
-echo "ro.aicp.device=$AICP_DEVICE"
+echo "ro.lineage.device=$LINEAGE_DEVICE"
 
 echo "# end build properties"

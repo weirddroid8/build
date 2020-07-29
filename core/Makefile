@@ -415,7 +415,7 @@ endif
 	$(hide) TARGET_BUILD_TYPE="$(TARGET_BUILD_VARIANT)" \
 	        TARGET_BUILD_FLAVOR="$(TARGET_BUILD_FLAVOR)" \
 	        TARGET_DEVICE="$(TARGET_DEVICE)" \
-	        AICP_DEVICE="$(TARGET_DEVICE)" \
+	        LINEAGE_DEVICE="$(TARGET_DEVICE)" \
 	        PRODUCT_DEFAULT_LOCALE="$(call get-default-product-locale,$(PRODUCT_LOCALES))" \
 	        PRODUCT_DEFAULT_WIFI_CHANNELS="$(PRODUCT_DEFAULT_WIFI_CHANNELS)" \
 	        PRIVATE_BUILD_DESC="$(PRIVATE_BUILD_DESC)" \
@@ -437,7 +437,6 @@ endif
 	        PLATFORM_VERSION_ALL_CODENAMES="$(PLATFORM_VERSION_ALL_CODENAMES)" \
 	        PLATFORM_MIN_SUPPORTED_TARGET_SDK_VERSION="$(PLATFORM_MIN_SUPPORTED_TARGET_SDK_VERSION)" \
 	        BUILD_VERSION_TAGS="$(BUILD_VERSION_TAGS)" \
-	        BUILD_FINGERPRINT="$(BUILD_FINGERPRINT_FROM_FILE)" \
 	        $(if $(OEM_THUMBPRINT_PROPERTIES),BUILD_THUMBPRINT="$(BUILD_THUMBPRINT_FROM_FILE)") \
 	        TARGET_CPU_ABI_LIST="$(TARGET_CPU_ABI_LIST)" \
 	        TARGET_CPU_ABI_LIST_32_BIT="$(TARGET_CPU_ABI_LIST_32_BIT)" \
@@ -892,7 +891,7 @@ endif
 ifdef BUILDING_RAMDISK_IMAGE
 BOOT_RAMDISK_COMPRESSOR := $(MINIGZIP)
 RECOVERY_RAMDISK_COMPRESSOR := $(MINIGZIP)
-LZMA := prebuilts/tools-aicp/${HOST_OS}-x86/bin/lzma
+LZMA := prebuilts/tools-lineage/${HOST_OS}-x86/bin/lzma
 ifneq ($(LZMA_RAMDISK_TARGETS),)
   ifneq (,$(findstring boot,$(LZMA_RAMDISK_TARGETS)))
     BOOT_RAMDISK_COMPRESSOR := $(LZMA) -f -c
@@ -1746,6 +1745,16 @@ RECOVERY_WIPE_DATA_CONFIRMATION_TEXT_FILE :=
 RECOVERY_WIPE_DATA_MENU_HEADER_TEXT_FILE :=
 endif # TARGET_RECOVERY_UI_SCREEN_WIDTH
 
+ifneq ($(TARGET_RECOVERY_DEVICE_DIRS),)
+recovery_root_private := $(strip \
+  $(foreach d,$(TARGET_RECOVERY_DEVICE_DIRS), $(wildcard $(d)/recovery/root)))
+else
+recovery_root_private := $(strip $(wildcard $(TARGET_DEVICE_DIR)/recovery/root))
+endif
+ifneq ($(recovery_root_private),)
+recovery_root_deps := $(shell find $(recovery_root_private) -type f)
+endif
+
 ifndef TARGET_PRIVATE_RES_DIRS
 TARGET_PRIVATE_RES_DIRS := $(wildcard $(TARGET_DEVICE_DIR)/recovery/res)
 endif
@@ -1797,6 +1806,7 @@ INSTALLED_RECOVERY_BUILD_PROP_TARGET := $(TARGET_RECOVERY_ROOT_OUT)/prop.default
 
 $(INSTALLED_RECOVERY_BUILD_PROP_TARGET): PRIVATE_RECOVERY_UI_PROPERTIES := \
     TARGET_RECOVERY_UI_ANIMATION_FPS:animation_fps \
+    TARGET_RECOVERY_UI_BLANK_UNBLANK_ON_INIT:blank_unblank_on_init \
     TARGET_RECOVERY_UI_MARGIN_HEIGHT:margin_height \
     TARGET_RECOVERY_UI_MARGIN_WIDTH:margin_width \
     TARGET_RECOVERY_UI_MENU_UNUSABLE_ROWS:menu_unusable_rows \
@@ -1843,9 +1853,9 @@ $(INSTALLED_RECOVERY_BUILD_PROP_TARGET): \
 	$(call append-recovery-ui-properties,$(PRIVATE_RECOVERY_UI_PROPERTIES),$@)
 
 INTERNAL_RECOVERYIMAGE_ARGS := \
-    $(addprefix --second ,$(INSTALLED_2NDBOOTLOADER_TARGET)) \
-    --kernel $(recovery_kernel) \
-    --ramdisk $(recovery_ramdisk)
+	$(addprefix --second ,$(INSTALLED_2NDBOOTLOADER_TARGET)) \
+	--kernel $(recovery_kernel) \
+	--ramdisk $(recovery_ramdisk)
 
 # Assumes this has already been stripped
 ifdef INTERNAL_KERNEL_CMDLINE
@@ -1915,21 +1925,17 @@ define build-recoveryramdisk
   $(hide) $(foreach recovery_text_file,$(generated_recovery_text_files), \
     cp -rf $(recovery_text_file) $(TARGET_RECOVERY_ROOT_OUT)/res/images/ &&) true
   $(hide) cp -f $(recovery_font) $(TARGET_RECOVERY_ROOT_OUT)/res/images/font.png
+  $(hide) $(foreach item,$(recovery_root_private), \
+    cp -rf $(item) $(TARGET_RECOVERY_OUT)/;)
   $(hide) $(foreach item,$(TARGET_PRIVATE_RES_DIRS), \
-    cp -rf $(item) $(TARGET_RECOVERY_ROOT_OUT)/$(newline))
+    cp -rf $(item) $(TARGET_RECOVERY_ROOT_OUT)/$(newline);)
   $(hide) $(foreach item,$(recovery_fstab), \
-    cp -f $(item) $(TARGET_RECOVERY_ROOT_OUT)/system/etc/recovery.fstab)
+    cp -f $(item) $(TARGET_RECOVERY_ROOT_OUT)/system/etc/recovery.fstab;)
   $(if $(strip $(recovery_wipe)), \
     $(hide) cp -f $(recovery_wipe) $(TARGET_RECOVERY_ROOT_OUT)/system/etc/recovery.wipe)
   $(hide) mkdir -p $(TARGET_RECOVERY_ROOT_OUT)/system/etc/security
   $(hide) cp $(RECOVERY_INSTALL_OTA_KEYS) $(TARGET_RECOVERY_ROOT_OUT)/system/etc/security/otacerts.zip
-  # Never allow persist.sys.usb.config to be set to none in recovery
-  $(hide) sed -i 's/persist.sys.usb.config=none/persist.sys.usb.config=adb/g' $(TARGET_RECOVERY_ROOT_OUT)/prop.default
   $(hide) ln -sf prop.default $(TARGET_RECOVERY_ROOT_OUT)/default.prop
-$(if $(TARGET_PREBUILT_RECOVERY_RAMDISK), \
-  $(hide) rm -rf $(PRODUCT_OUT)/prebuilt_recovery
-  $(hide) mkdir -p $(PRODUCT_OUT)/prebuilt_recovery
-  $(hide) unzip -o $(TARGET_PREBUILT_RECOVERY_RAMDISK) -d $(PRODUCT_OUT)/prebuilt_recovery/)
   $(BOARD_RECOVERY_IMAGE_PREPARE)
 endef
 
@@ -1987,18 +1993,14 @@ $(INSTALLED_BOOTIMAGE_TARGET): $(MKBOOTFS) $(MKBOOTIMG) $(MINIGZIP) \
 	    $(recovery_initrc) $(recovery_sepolicy) $(recovery_kernel) \
 	    $(INSTALLED_2NDBOOTLOADER_TARGET) \
 	    $(INSTALLED_RECOVERY_BUILD_PROP_TARGET) \
-	    $(recovery_resource_deps) \
+	    $(recovery_resource_deps) $(recovery_root_deps) \
 	    $(recovery_fstab) \
 	    $(RECOVERY_INSTALL_OTA_KEYS) \
 	    $(BOARD_RECOVERY_KERNEL_MODULES) \
 	    $(DEPMOD)
 	$(call pretty,"Target boot image from recovery: $@")
 	$(call build-recoveryramdisk)
-ifneq ($(TARGET_PREBUILT_RECOVERY_RAMDISK),)
-	$(hide) $(MKBOOTFS) -d $(TARGET_OUT) $(PRODUCT_OUT)/prebuilt_recovery | $(RECOVERY_RAMDISK_COMPRESSOR) > $(recovery_ramdisk)
-else
 	$(hide) $(MKBOOTFS) -d $(TARGET_OUT) $(TARGET_RECOVERY_ROOT_OUT) | $(RECOVERY_RAMDISK_COMPRESSOR) > $(recovery_ramdisk)
-endif
 	$(call build-recoveryimage-target, $@)
 endif # BOARD_USES_RECOVERY_AS_BOOT
 
@@ -2024,7 +2026,7 @@ $(recovery_uncompressed_ramdisk): $(MKBOOTFS) $(ADBD) \
 	    $(recovery_initrc) $(recovery_sepolicy) \
 	    $(INSTALLED_2NDBOOTLOADER_TARGET) \
 	    $(INSTALLED_RECOVERY_BUILD_PROP_TARGET) \
-	    $(recovery_resource_deps) \
+	    $(recovery_resource_deps) $(recovery_root_deps) \
 	    $(recovery_fstab) \
 	    $(RECOVERY_INSTALL_OTA_KEYS) \
 	    $(BOARD_RECOVERY_KERNEL_MODULES) \
@@ -2221,13 +2223,6 @@ INTERNAL_SYSTEMIMAGE_FILES := $(sort $(filter $(TARGET_OUT)/%, \
     $(PDK_FUSION_SYSIMG_FILES) \
     $(RECOVERY_RESOURCE_ZIP)) \
     $(PDK_FUSION_SYMLINK_STAMP))
-
-.PHONY: systemimage-changelog
-systemimage-changelog: $(INTERNAL_SYSTEMIMAGE_FILES)
-	@echo -e "Making changelog!"
-	$(hide) APKCERTS=$(APKCERTS_FILE) ./vendor/aicp/tools/changelog
-
-CHANGELOG := systemimage-changelog
 
 FULL_SYSTEMIMAGE_DEPS := $(INTERNAL_SYSTEMIMAGE_FILES) $(INTERNAL_USERIMAGES_DEPS)
 
@@ -3553,9 +3548,6 @@ endif
   ifeq ($(TARGET_BUILD_PDK),true)
     build_ota_package := false
   endif
-  ifeq ($(TARGET_FORCE_OTA_PACKAGE),true)
-    build_ota_package := true
-  endif
 
   # set build_otatools_package, and allow opt-out below
   build_otatools_package := true
@@ -3830,8 +3822,7 @@ $(BUILT_TARGET_FILES_PACKAGE): \
 	    $(BUILT_ASSEMBLED_VENDOR_MANIFEST) \
 	    $(BUILT_SYSTEM_MATRIX) \
 	    $(BUILT_VENDOR_MATRIX) \
-	    | $(ACP) \
-	    $(CHANGELOG)
+	    | $(ACP)
 	@echo "Package target files: $@"
 	$(call create-system-vendor-symlink)
 	$(call create-system-product-symlink)
@@ -3841,15 +3832,9 @@ $(BUILT_TARGET_FILES_PACKAGE): \
 	$(hide) mkdir -p $(dir $@) $(zip_root)
 ifneq (,$(INSTALLED_RECOVERYIMAGE_TARGET)$(filter true,$(BOARD_USES_RECOVERY_AS_BOOT)))
 	@# Components of the recovery image
-ifneq ($(TARGET_PREBUILT_RECOVERY_RAMDISK),)
-	$(hide) mkdir -p $(zip_root)/$(PRIVATE_RECOVERY_OUT)
-	$(hide) $(call package_files-copy-root, \
-	    $(PRODUCT_OUT)/prebuilt_recovery,$(zip_root)/$(PRIVATE_RECOVERY_OUT)/RAMDISK)
-else
 	$(hide) mkdir -p $(zip_root)/$(PRIVATE_RECOVERY_OUT)
 	$(hide) $(call package_files-copy-root, \
 	    $(TARGET_RECOVERY_ROOT_OUT),$(zip_root)/$(PRIVATE_RECOVERY_OUT)/RAMDISK)
-endif
 	@# OTA install helpers
 	$(hide) $(call package_files-copy-root, \
 	    $(PRODUCT_OUT)/install,$(zip_root)/INSTALL)
@@ -4298,7 +4283,7 @@ endif
 ifeq ($(TARGET_BUILD_VARIANT),user)
     $(INTERNAL_OTA_PACKAGE_TARGET): backuptool := false
 else
-ifneq ($(AICP_BUILD),)
+ifneq ($(LINEAGE_BUILD),)
     $(INTERNAL_OTA_PACKAGE_TARGET): backuptool := true
 else
     $(INTERNAL_OTA_PACKAGE_TARGET): backuptool := false

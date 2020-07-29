@@ -32,6 +32,7 @@ PRODUCT_PACKAGES += \
     Music \
     OneTimeInitializer \
     Provision \
+    QuickSearchBox \
     Settings \
     SettingsIntelligence \
     StorageManager \
@@ -39,7 +40,7 @@ PRODUCT_PACKAGES += \
     WallpaperCropper \
     frameworks-base-overlays
 
-ifeq ($(AICP_BUILD),)
+ifeq ($(LINEAGE_BUILD),)
 PRODUCT_PACKAGES += \
     LatinIME
 endif
